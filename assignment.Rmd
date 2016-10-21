@@ -1,0 +1,134 @@
+---
+title: "Linear Regression Assignment"
+author: "Zhang Jinyan"
+date: "19/10/2016"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      fig.align = "center",
+                      fig.path = 'fig/')
+```
+
+## Linear Regression Assignment
+
+This is done in submission for Coursera Data Science Specialization Linear Regression Course Assignment. We are supposed to look at the relationship between types of transmission for motor cars, manual or automatic, and its corresponding fuel consumption rate measured in miles per gallon. The data set is obtained from R itself, `mtcars` data set. 
+
+First, we need to know which variables to use, and in order to do that, we need to understand the variables.
+
+`?mtcars` brings you the help file for the `mtcars` data set, and we shall split the variables into designed input (e.g. number of cylinders) and performance output (e.g. fuel consumption).
+
+#### Design Input 
+1. `cyl` = number of cylinders (part of the engine)
+2. `disp` = swept volume of pistons inside cylinders (cubic inches)
+3. `wt` = weight of the car (1000 lbs)
+4. `vs` = presence of V engine (0 = V engine, 1 = straight engine)
+5. `am` = mode of transmission (0 = automatic, 1 = manual)
+6. `gear` = number of forward gears
+7. `carb` = number of carburetors (a device that blends air and fuel)
+
+#### Performance Output
+1. `mpg` = miles travelled per gallon of petrol consumed
+2. `hp` = horsepower (a measurement of rate at which work is done)
+3. `drat` = ratio between driveshaft revolutions per minute 
+4. `qsec` = time needed to cover 1/4 mile from stop position (acceleration)
+
+So we are essentially looking at how the car design affects the `mpg` variable, the fuel consumption rate. We'll subset out the necessary data and do necessary class changes if applicable, then we'll look at them using some graphs.
+
+```{r "exploratory"}
+data(mtcars)
+# subset out the dependent and independent variables
+mtcars <- mtcars[, c(1, 2, 3, 6, 8, 9, 10, 11)]
+# converting numeric inputs into factors for factor variables
+mtcars$am[mtcars$am == 0] <- "Automatic"
+mtcars$am[mtcars$am == 1] <- "Manual"
+mtcars$am <- factor(mtcars$am)
+mtcars$cyl <- factor(mtcars$cyl)
+mtcars$vs <- factor(mtcars$vs)
+mtcars$gear <- factor(mtcars$gear)
+
+str(mtcars)
+par()$oma
+par(oma = c(0, 0, 0, 3))
+pairs(mtcars[, 1:8],
+      main = "1974 Motor Trend Automobile Design and Peformance",
+      pch = 21, 
+      bg = c("red", "green")[unclass(mtcars$am)])
+```
+
+In the graph above, green represents cars with manual transmission while red represents cars with automatic transmission. 
+
+```{r "exploratory2"}
+# remove disp which is highly correlated with wt
+cor(mtcars$disp, mtcars$wt)
+disp.sig <- summary(lm(disp ~ wt, data = mtcars))$coef[8]
+mtcars <- mtcars[, -3]
+
+# keep carb as numeric
+table(mtcars$carb)
+```
+
+We will also remove the variable `disp` because it is highly correlated with `wt` at significance level of `r round(disp.sig, 3)` (< 0.05). And lastly, we'll keep `carb` as a numeric input as there are only one data point for both 6 and 8 carburetors. 
+
+### Model Selection
+We wish to understand the `mpg` variable based on whether the car is on automatic or manual transmission. We will proceed to identify the design variables that affect the fuel consumption rate by [backward elimination](https://en.wikipedia.org/wiki/Stepwise_regression), i.e., removing the variable with the highest p-value until all p-values lie below a certain threshold. The baseline that was used for comparison is a car with automatic transmission and 4 cylinders. 
+
+```{r "linear model"}
+fit.lm <- lm(mpg ~ ., data = mtcars); summary(fit.lm)$coef
+fit.lm <- lm(mpg ~ .- vs, data = mtcars); summary(fit.lm)$coef
+fit.lm <- lm(mpg ~ .- vs - gear, data = mtcars); summary(fit.lm)$coef
+```
+At this point, the p-value for `am` variable is the highest at `r round(summary(fit.lm)$coef[23], 3)`, and it is more than the threshold at `0.05`. This means that setting all remaining variables constant, there is no difference between the `mpg` of car with automatic or manual transmission.
+
+However, if we were to continue with the model selection, we will end up with only two variables, `cyl` and `wt` as the variables affecting the `mpg`. 
+
+```{r "further"}
+fit.lm <- lm(mpg ~ .- vs - gear - am, data = mtcars); summary(fit.lm)$coef
+fit.lm <- lm(mpg ~ . - vs - gear - am - carb, 
+             data = mtcars); summary(fit.lm)$coef
+
+cyl6.coef <- summary(fit.lm)$coef[2]
+cyl6.conf <- cyl6.coef + c(-1, 1) * qt(0.975, 27) * summary(fit.lm)$coef[6]
+cyl8.coef <- summary(fit.lm)$coef[3]
+cyl8.conf <- cyl8.coef + c(-1, 1) * qt(0.975, 27) * summary(fit.lm)$coef[7]
+wt.coef <- summary(fit.lm)$coef[4]
+wt.conf <- wt.coef + c(-1, 1) * qt(0.975, 27) * summary(fit.lm)$coef[8]
+
+op<-par(no.readonly=TRUE)
+par(op)
+par(mfrow = c(1, 2), 
+    oma = c(3, 5, 3, 3),
+    mar = c(4.1, 0, 2, 0))
+plot(mtcars$cyl, mtcars$mpg,
+     xlab = "Number of cylinders",
+     cex.lab = 1.3,
+     ylab = "",
+     col = c("red", "yellow", "green"))
+colGrad <- colorRampPalette(c("blue", "yellow"))
+plot(mtcars$wt, mtcars$mpg,
+     xlab = "Weight of car (1000 lbs)",
+     cex.lab = 1.3,
+     ylab = "",
+     pch = 21,
+     cex = 2,
+     bg = colGrad(33)[mtcars$mpg],
+     yaxt = "n")
+mtext(text = "Miles travelled per gallon", 
+      side = 2, 
+      line = 3, 
+      cex = 1.3,
+      outer = TRUE)
+mtext("Change in fuel consumpetion with cylinders and weight", 
+      outer = TRUE, 
+      cex = 1.5)
+```
+
+#### Interpreting the Coefficients
+The coefficient for `cyl6` means the average `mpg` value will change by `r round(cyl6.coef, 3)` when the number of cylinders change from 4 to 6 with a 95% confidence interval of `r round(cyl6.conf, 3)`.
+
+Whereas, the `mpg` value will change by `r round(cyl8.coef, 3)` when the number of cylinders change from 4 to 8 with a 95% confidence interval of `r round(cyl8.conf, 3)`.
+
+The coefficient for `wt` means the average `mpg` value will change by `r round(wt.coef, 3)` when the weight of car decreases by 1000 lbs with a confidence interval of `r round(wt.conf, 3)`. 
+
+Also note that since all the values in the confidence intervals are negative, it corresponds to the p-value and that there is a true decrease in `mpg` values when the performance variable changes. 
