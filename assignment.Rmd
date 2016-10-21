@@ -2,7 +2,7 @@
 title: "Linear Regression Assignment"
 author: "Zhang Jinyan"
 date: "19/10/2016"
-output: html_document
+output: pdf_document
 ---
 
 ```{r setup, include = FALSE}
@@ -49,8 +49,6 @@ mtcars$vs <- factor(mtcars$vs)
 mtcars$gear <- factor(mtcars$gear)
 
 str(mtcars)
-par()$oma
-par(oma = c(0, 0, 0, 3))
 pairs(mtcars[, 1:8],
       main = "1974 Motor Trend Automobile Design and Peformance",
       pch = 21, 
@@ -61,25 +59,45 @@ In the graph above, green represents cars with manual transmission while red rep
 
 ```{r "exploratory2"}
 # remove disp which is highly correlated with wt
+print("Correlation between disp and wt")
 cor(mtcars$disp, mtcars$wt)
 disp.sig <- summary(lm(disp ~ wt, data = mtcars))$coef[8]
 mtcars <- mtcars[, -3]
 
 # keep carb as numeric
+print("Number of carburetors over number of cars")
 table(mtcars$carb)
 ```
 
 We will also remove the variable `disp` because it is highly correlated with `wt` at significance level of `r round(disp.sig, 3)` (< 0.05). And lastly, we'll keep `carb` as a numeric input as there are only one data point for both 6 and 8 carburetors. 
 
+### Difference in MPG by Mode of Transmission
+To simply understand if there is a difference in the `mpg` values based on the mode of transmission, manual or automatic, we can do a `t.test` and a simple plot to show the difference.
+
+```{r "transmission"}
+manual <- mtcars[which(mtcars$am == "Manual"), ]
+auto <- mtcars[which(mtcars$am == "Automatic"), ]
+test <- t.test(manual$mpg, auto$mpg)
+print(test)
+plot(mtcars$am, mtcars$mpg, 
+     ylab = "Miles Travelled per Gallon", 
+     xlab = "Mode of Transmission",
+     col = c("red", "green"))
+```
+
+From the boxplot, we can see a difference in median of `mpg` between the mode of transmission. From the `t.test`, the p-value `r round(test$p.value, 3)` < 0.05, thus we would reject the null hypothesis that there is not a difference between the `mpg` of different mode of transmission. 
+
 ### Model Selection
-We wish to understand the `mpg` variable based on whether the car is on automatic or manual transmission. We will proceed to identify the design variables that affect the fuel consumption rate by [backward elimination](https://en.wikipedia.org/wiki/Stepwise_regression), i.e., removing the variable with the highest p-value until all p-values lie below a certain threshold. The baseline that was used for comparison is a car with automatic transmission and 4 cylinders. 
+We also wish to understand the `mpg` variable based on the rest of the variables. We will proceed to identify the design variables that affect the fuel consumption rate by [backward elimination](https://en.wikipedia.org/wiki/Stepwise_regression), i.e., removing the variable with the highest p-value until all p-values lie below a certain threshold. The baseline that was used for comparison is a car with automatic transmission and 4 cylinders. 
 
 ```{r "linear model"}
 fit.lm <- lm(mpg ~ ., data = mtcars); summary(fit.lm)$coef
 fit.lm <- lm(mpg ~ .- vs, data = mtcars); summary(fit.lm)$coef
 fit.lm <- lm(mpg ~ .- vs - gear, data = mtcars); summary(fit.lm)$coef
 ```
-At this point, the p-value for `am` variable is the highest at `r round(summary(fit.lm)$coef[23], 3)`, and it is more than the threshold at `0.05`. This means that setting all remaining variables constant, there is no difference between the `mpg` of car with automatic or manual transmission.
+At this point, the p-value for `am` variable is the highest at `r round(summary(fit.lm)$coef[23], 3)`, and it is more than the threshold at `0.05`. This means that setting all remaining variables constant, there is no difference between the `mpg` of car with automatic or manual transmission. 
+
+This is in contrast with the results we got from the `t.test`. One reason for this is that there might be strong correlations between the different variables with the mode of transmission. The correlations will affect the coefficients of the variables, thus affecting the significance of that variable. 
 
 However, if we were to continue with the model selection, we will end up with only two variables, `cyl` and `wt` as the variables affecting the `mpg`. 
 
